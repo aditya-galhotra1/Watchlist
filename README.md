@@ -3,5 +3,4 @@
 - #### Have to input image and show title and season by your self
 # Future Add-ons
 - #### Watchlist 
-- #### Sorting system
-- #### Customization 
+
