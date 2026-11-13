@@ -12,18 +12,19 @@
 :root{--bg:#11131c;--card:#1a1d2a;--line:#2b3042;--tx:#eceef5;--mut:#8f95aa;--ac:#8be0c6}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 14px calc(96px + env(safe-area-inset-bottom))}
-header{display:flex;justify-content:space-between;align-items:baseline;margin:20px 0 12px}
+header{display:flex;justify-content:space-between;align-items:center;margin:20px 0 12px}
 h1{font-size:30px;margin:0;font-weight:700}
-#st{font-size:13px;color:var(--mut)}
+#st{font-size:13px;color:var(--mut);margin-right:8px}
+.hbtn{width:38px;height:38px;padding:0;border-radius:50%;font-size:18px}
 #tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto}
 button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer}
-#tabs button.on,.seg button.on,.pri{background:var(--ac);border-color:var(--ac);color:#0b1a15;font-weight:600}
-#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:12px}
+#tabs button.on,.seg button.on,.pri{background:var(--ac);border-color:var(--ac);color:var(--on);font-weight:600}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--pw,104px),1fr));gap:12px}
 .card{background:var(--card);border-radius:14px;overflow:hidden}
-.poster{position:relative;aspect-ratio:2/3;background:#232738;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--mut)}
+.poster{position:relative;aspect-ratio:2/3;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--mut)}
 .poster img{width:100%;height:100%;object-fit:cover;display:block}
-.tag{position:absolute;top:6px;left:6px;background:#000b;font-size:10px;padding:2px 6px;border-radius:6px}
-.tag.fin{left:auto;right:6px;background:var(--ac);color:#0b1a15;font-weight:600}
+.tag{position:absolute;top:6px;left:6px;background:#000b;color:#fff;font-size:10px;padding:2px 6px;border-radius:6px}
+.tag.fin{left:auto;right:6px;background:var(--ac);color:var(--on);font-weight:600}
 #tabs button{flex:none;white-space:nowrap}
 .bar{position:absolute;left:0;right:0;bottom:0;height:5px;background:#0008}
 .bar i{display:block;height:100%;background:var(--ac)}
@@ -34,8 +35,20 @@ button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--
 .step div{display:flex;gap:6px;margin-top:4px}
 .step button{flex:1;height:30px;padding:0;font-size:18px;line-height:1;border-radius:8px}
 .step span{font-weight:600;font-size:13px}
+#ctl{display:flex;gap:8px;margin:0 0 16px}
+#ctl select{flex:1;min-width:0;font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:8px 14px}
+#ctl button{white-space:nowrap}
+#ctl button.on{background:var(--ac);border-color:var(--ac);color:var(--on);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chips button{display:flex;align-items:center;gap:6px;padding:7px 12px}
+.chips button.on{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
+.chips .sw{width:34px;height:34px;padding:0}
+.chips .sw.on{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--tx);border-color:transparent}
+.dot{width:14px;height:14px;border-radius:50%;border:1px solid #8886;display:inline-block}
+input[type=range]{width:100%;accent-color:var(--ac)}
+input[type=color]{width:46px;height:34px;border:0;background:none;padding:0}
 #empty{color:var(--mut);text-align:center;margin-top:60px}
-#fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:58px;height:58px;padding:0;font-size:32px;border-radius:50%;background:var(--ac);border-color:var(--ac);color:#0b1a15}
+#fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:58px;height:58px;padding:0;font-size:32px;border-radius:50%;background:var(--ac);border-color:var(--ac);color:var(--on)}
 .sheet{position:fixed;inset:0;background:#000b;display:flex;align-items:flex-end;z-index:5}
 .sheet[hidden]{display:none}
 #box{background:var(--card);width:100%;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px 16px calc(22px + env(safe-area-inset-bottom))}
@@ -54,8 +67,22 @@ input[type=text],input[type=number],input[type=date]{width:100%;font:inherit;col
 </style>
 </head>
 <body>
-<header><h1>Watchlist</h1><span id="st"></span></header>
+<header><h1>Watchlist</h1><span><span id="st"></span><button class="hbtn" onclick="openTheme()" aria-label="Theme">🎨</button></span></header>
 <div id="tabs"></div>
+<div id="ctl">
+<select id="sort" onchange="prefs.sort=this.value;savePrefs();render()">
+<option value="upd">Recently updated</option>
+<option value="prog">In progress first, finished last</option>
+<option value="rate">Rating: high to low</option>
+<option value="rateLow">Rating: low to high</option>
+<option value="dateNew">Date finished: newest</option>
+<option value="dateOld">Date finished: oldest</option>
+<option value="az">Title: A to Z</option>
+<option value="za">Title: Z to A</option>
+<option value="added">Recently added</option>
+</select>
+<button id="hide" onclick="toggleHide()">Hide finished</button>
+</div>
 <div id="grid"></div>
 <p id="empty" hidden>Nothing here yet. Tap + to add something.</p>
 <button id="fab" aria-label="Add" onclick="openForm()">+</button>
@@ -73,6 +100,81 @@ const total = i => i.seasons.reduce((a, b) => a + b, 0);
 let items = JSON.parse(localStorage.wl || '[]'), tab = 'all', f = null, isNew = false, timers = {};
 const persist = () => localStorage.wl = JSON.stringify(items);
 
+const THEMES = {
+  midnight: ['Midnight', '#11131c', '#1a1d2a', '#2b3042', '#eceef5', '#8f95aa'],
+  black:    ['Black',    '#000000', '#141414', '#2a2a2a', '#f5f5f5', '#8a8a8a'],
+  light:    ['Light',    '#f4f5f8', '#ffffff', '#dfe2ea', '#1a1d2a', '#6b7186'],
+  ocean:    ['Ocean',    '#0c1a24', '#12293a', '#1f3d54', '#e6f1f8', '#86a3b8'],
+  forest:   ['Forest',   '#101a14', '#17261d', '#25402f', '#e8f3ec', '#8aa595'],
+  plum:     ['Plum',     '#1a1020', '#261830', '#3d2850', '#f3e9f8', '#a58cb5']
+};
+const ACCENTS = ['#8be0c6', '#ff7a6b', '#6cb8ff', '#ffc94d', '#b69cff', '#ff7eb6'];
+let prefs = Object.assign({ theme: 'midnight', ac: '#8be0c6', pw: 104, sort: 'upd', hide: false }, JSON.parse(localStorage.wlp || '{}'));
+const savePrefs = () => localStorage.wlp = JSON.stringify(prefs);
+
+function onColor(h) {
+  const n = parseInt(h.slice(1), 16);
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150 ? '#0b1a15' : '#ffffff';
+}
+function applyPrefs() {
+  const t = THEMES[prefs.theme] || THEMES.midnight, r = document.documentElement.style;
+  ['--bg', '--card', '--line', '--tx', '--mut'].forEach((k, n) => r.setProperty(k, t[n + 1]));
+  r.setProperty('--ac', prefs.ac);
+  r.setProperty('--on', onColor(prefs.ac));
+  r.setProperty('--pw', prefs.pw + 'px');
+  document.querySelector('meta[name=theme-color]').content = t[1];
+}
+function setTheme(k) { prefs.theme = k; savePrefs(); applyPrefs(); drawTheme(); }
+function setAc(c) { prefs.ac = c; savePrefs(); applyPrefs(); drawTheme(); }
+function resetTheme() { prefs.theme = 'midnight'; prefs.ac = '#8be0c6'; prefs.pw = 104; savePrefs(); applyPrefs(); drawTheme(); }
+function openTheme() { drawTheme(); $('#m').hidden = false; }
+function drawTheme() {
+  $('#box').innerHTML = `
+  <label>Theme</label>
+  <div class="chips">${Object.entries(THEMES).map(([k, t]) => `<button class="${prefs.theme == k ? 'on' : ''}" onclick="setTheme('${k}')"><span class="dot" style="background:${t[1]}"></span>${t[0]}</button>`).join('')}</div>
+  <label>Accent colour</label>
+  <div class="chips">${ACCENTS.map(c => `<button class="sw ${prefs.ac == c ? 'on' : ''}" style="background:${c}" onclick="setAc('${c}')"></button>`).join('')}<input type="color" value="${prefs.ac}" oninput="prefs.ac=this.value;savePrefs();applyPrefs()"></div>
+  <label>Poster size</label>
+  <input type="range" min="80" max="180" value="${prefs.pw}" oninput="prefs.pw=+this.value;savePrefs();applyPrefs()">
+  <div class="row"><button onclick="resetTheme()">Reset</button><button class="pri" onclick="closeM()">Done</button></div>`;
+}
+
+const fin = i => i.kind == 'series' && !i.ongoing && i.w >= total(i);
+function dateNewest(a, b) {
+  const x = a.date, y = b.date;
+  if (!x && !y) return b.t - a.t;
+  if (!x) return -1;
+  if (!y) return 1;
+  return x > y ? -1 : x < y ? 1 : b.t - a.t;
+}
+function dateOldest(a, b) {
+  const x = a.date, y = b.date;
+  if (!x && !y) return b.t - a.t;
+  if (!x) return -1;
+  if (!y) return 1;
+  return x < y ? -1 : x > y ? 1 : b.t - a.t;
+}
+function cmp(a, b) {
+  const s = prefs.sort;
+  if (s == 'prog') {
+    const d = (fin(a) || a.kind == 'movie') - (fin(b) || b.kind == 'movie');
+    return d || b.t - a.t;
+  }
+  if (s == 'rate' || s == 'rateLow') {
+    const ra = +a.rating || 0, rb = +b.rating || 0;
+    if (ra && rb && ra != rb) return s == 'rate' ? rb - ra : ra - rb;
+    if (!ra != !rb) return ra ? -1 : 1;
+    return dateNewest(a, b);
+  }
+  if (s == 'dateNew') return dateNewest(a, b);
+  if (s == 'dateOld') return dateOldest(a, b);
+  if (s == 'az') return a.title.localeCompare(b.title);
+  if (s == 'za') return b.title.localeCompare(a.title);
+  if (s == 'added') return parseInt(b.id, 36) - parseInt(a.id, 36);
+  return b.t - a.t;
+}
+function toggleHide() { prefs.hide = !prefs.hide; savePrefs(); render(); }
+
 function pos(i) {
   let w = i.w, s = 0;
   if (!w) return 'Not started';
@@ -81,10 +183,12 @@ function pos(i) {
 }
 
 function render() {
-  const list = items.filter(i => tab == 'all' || (tab == 'movie' && i.kind == 'movie' && !i.anime) || (tab == 'series' && i.kind == 'series' && !i.anime) || (tab == 'am' && i.kind == 'movie' && i.anime) || (tab == 'as' && i.kind == 'series' && i.anime)).sort((a, b) => b.t - a.t);
+  const list = items.filter(i => tab == 'all' || (tab == 'movie' && i.kind == 'movie' && !i.anime) || (tab == 'series' && i.kind == 'series' && !i.anime) || (tab == 'am' && i.kind == 'movie' && i.anime) || (tab == 'as' && i.kind == 'series' && i.anime)).filter(i => !(prefs.hide && fin(i))).sort(cmp);
   $('#tabs').innerHTML = [['all','All'],['movie','Movies'],['series','Series'],['am','Anime Movies'],['as','Anime Shows']].map(([k, l]) => `<button class="${tab == k ? 'on' : ''}" onclick="tab='${k}';render()">${l}</button>`).join('');
   $('#grid').innerHTML = list.map(card).join('');
   $('#empty').hidden = list.length > 0;
+  $('#sort').value = prefs.sort;
+  $('#hide').className = prefs.hide ? 'on' : '';
 }
 
 function card(i) {
@@ -207,6 +311,7 @@ function del() {
   persist(); render(); sync(f.id, { action: 'delete', id: f.id }); closeM();
 }
 
+applyPrefs();
 load();
 </script>
 </body>
