@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Watchlist">
-<link rel="apple-touch-icon" href="icon.jpg">
+<meta name="theme-color" content="#11131c">
+<link rel="apple-touch-icon" href="icon.png">
 <title>Watchlist</title>
 <style>
 :root{--bg:#11131c;--card:#1a1d2a;--line:#2b3042;--tx:#eceef5;--mut:#8f95aa;--ac:#8be0c6}
@@ -21,7 +22,9 @@ button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--
 .card{background:var(--card);border-radius:14px;overflow:hidden}
 .poster{position:relative;aspect-ratio:2/3;background:#232738;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--mut)}
 .poster img{width:100%;height:100%;object-fit:cover;display:block}
-.tag{position:absolute;top:8px;left:8px;background:#000b;font-size:12px;padding:2px 8px;border-radius:6px}
+.tag{position:absolute;top:6px;left:6px;background:#000b;font-size:10px;padding:2px 6px;border-radius:6px}
+.tag.fin{left:auto;right:6px;background:var(--ac);color:#0b1a15;font-weight:600}
+#tabs button{flex:none;white-space:nowrap}
 .bar{position:absolute;left:0;right:0;bottom:0;height:5px;background:#0008}
 .bar i{display:block;height:100%;background:var(--ac)}
 .meta{padding:8px 8px 10px}
@@ -78,8 +81,8 @@ function pos(i) {
 }
 
 function render() {
-  const list = items.filter(i => tab == 'all' || (tab == 'movie' && i.kind == 'movie') || (tab == 'series' && i.kind == 'series') || (tab == 'anime' && i.anime)).sort((a, b) => b.t - a.t);
-  $('#tabs').innerHTML = [['all','All'],['movie','Movies'],['series','Series'],['anime','Anime']].map(([k, l]) => `<button class="${tab == k ? 'on' : ''}" onclick="tab='${k}';render()">${l}</button>`).join('');
+  const list = items.filter(i => tab == 'all' || (tab == 'movie' && i.kind == 'movie' && !i.anime) || (tab == 'series' && i.kind == 'series' && !i.anime) || (tab == 'am' && i.kind == 'movie' && i.anime) || (tab == 'as' && i.kind == 'series' && i.anime)).sort((a, b) => b.t - a.t);
+  $('#tabs').innerHTML = [['all','All'],['movie','Movies'],['series','Series'],['am','Anime Movies'],['as','Anime Shows']].map(([k, l]) => `<button class="${tab == k ? 'on' : ''}" onclick="tab='${k}';render()">${l}</button>`).join('');
   $('#grid').innerHTML = list.map(card).join('');
   $('#empty').hidden = list.length > 0;
 }
@@ -88,9 +91,9 @@ function card(i) {
   const s = i.kind == 'series', done = s && !i.ongoing && i.w >= total(i);
   const rd = (i.rating ? '★ ' + (+i.rating) + '<br>' : '') + (i.date || '');
   const body = s
-    ? `<div class="step"><span>${done ? 'Finished' : pos(i)}</span><div><button onclick="step('${i.id}',-1)">−</button><button onclick="step('${i.id}',1)">+</button></div></div>${done && rd ? `<div class="sub">${rd}</div>` : ''}`
+    ? `<div class="step"><span>${pos(i)}</span><div><button onclick="step('${i.id}',-1)">−</button><button onclick="step('${i.id}',1)">+</button></div></div>${done && rd ? `<div class="sub">${rd}</div>` : ''}`
     : `<div class="sub">${rd}</div>`;
-  return `<div class="card"><div class="poster" onclick="openForm('${i.id}')">${i.img ? `<img src="${i.img}">` : esc(i.title[0] || '?')}${i.anime ? '<span class="tag">Anime</span>' : ''}${s ? `<div class="bar"><i style="width:${Math.min(100, i.w / total(i) * 100)}%"></i></div>` : ''}</div><div class="meta"><b>${esc(i.title)}</b>${body}</div></div>`;
+  return `<div class="card"><div class="poster" onclick="openForm('${i.id}')">${i.img ? `<img src="${i.img}">` : esc(i.title[0] || '?')}${i.anime ? '<span class="tag">Anime</span>' : ''}${done ? '<span class="tag fin">Finished</span>' : ''}${s ? `<div class="bar"><i style="width:${Math.min(100, i.w / total(i) * 100)}%"></i></div>` : ''}</div><div class="meta"><b>${esc(i.title)}</b>${body}</div></div>`;
 }
 
 function step(id, d) {
@@ -180,6 +183,7 @@ function draw() {
   ${s ? `<label>How many seasons?</label><input type="number" min="1" max="40" value="${f.seasons.length}" onchange="setN(+this.value)">
   <label>Episodes in each season</label><div class="eps">${f.seasons.map((n, k) => `<div><small>Season ${k + 1}</small><input type="number" min="1" value="${n}" oninput="f.seasons[${k}]=Math.max(1,+this.value||1)"></div>`).join('')}</div>
   <label class="chk"><input type="checkbox" ${f.ongoing ? 'checked' : ''} onchange="f.ongoing=this.checked"> Still airing (enter the episodes out so far)</label>
+  <label class="chk"><input type="checkbox" ${f.all ? 'checked' : ''} onchange="f.all=this.checked"> I've already watched all of it (jump to the last episode)</label>
   <label>Date finished</label>` : '<label>Date watched</label>'}
   <input type="date" value="${f.date}" onchange="f.date=this.value">
   <label>Rating out of 10 (optional)</label>
@@ -191,9 +195,10 @@ function commit() {
   f.title = f.title.trim();
   if (!f.title) return alert('Add a title first');
   if (f.kind == 'series') {
-    f.w = Math.min(f.w, total(f));
+    f.w = f.all ? total(f) : Math.min(f.w, total(f));
     if (!f.ongoing && f.w >= total(f) && !f.date) f.date = today();
   } else { f.seasons = []; f.w = 0; }
+  delete f.all;
   save(f); closeM();
 }
 function del() {
