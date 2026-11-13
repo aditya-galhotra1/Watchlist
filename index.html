@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Watchlist">
+<meta name="theme-color" content="#11131c">
+<title>Watchlist</title>
+<style>
+:root{--bg:#11131c;--card:#1a1d2a;--line:#2b3042;--tx:#eceef5;--mut:#8f95aa;--ac:#8be0c6}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 14px calc(96px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:baseline;margin:20px 0 12px}
+h1{font-size:30px;margin:0;font-weight:700}
+#st{font-size:13px;color:var(--mut)}
+#tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto}
+button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer}
+#tabs button.on,.seg button.on,.pri{background:var(--ac);border-color:var(--ac);color:#0b1a15;font-weight:600}
+#grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.card{background:var(--card);border-radius:14px;overflow:hidden}
+.poster{position:relative;aspect-ratio:2/3;background:#232738;display:flex;align-items:center;justify-content:center;font-size:44px;color:var(--mut)}
+.poster img{width:100%;height:100%;object-fit:cover;display:block}
+.tag{position:absolute;top:8px;left:8px;background:#000b;font-size:12px;padding:2px 8px;border-radius:6px}
+.bar{position:absolute;left:0;right:0;bottom:0;height:5px;background:#0008}
+.bar i{display:block;height:100%;background:var(--ac)}
+.meta{padding:10px 12px 12px}
+.meta b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{color:var(--mut);font-size:13px;margin-top:2px}
+.step{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.step button{width:40px;height:40px;padding:0;font-size:22px;line-height:1}
+.step span{font-weight:600}
+#empty{color:var(--mut);text-align:center;margin-top:60px}
+#fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:58px;height:58px;padding:0;font-size:32px;border-radius:50%;background:var(--ac);border-color:var(--ac);color:#0b1a15}
+.sheet{position:fixed;inset:0;background:#000b;display:flex;align-items:flex-end;z-index:5}
+.sheet[hidden]{display:none}
+#box{background:var(--card);width:100%;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px 16px calc(22px + env(safe-area-inset-bottom))}
+#box label{display:block;color:var(--mut);font-size:14px;margin:14px 0 6px}
+#box label.chk{display:flex;gap:8px;align-items:center;color:var(--tx);margin:12px 0}
+input[type=text],input[type=number],input[type=date]{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px}
+.seg{display:flex;gap:8px}.seg button{flex:1}
+.pick{display:flex;align-items:center;gap:12px;margin-top:12px}
+.pick img{width:60px;height:90px;object-fit:cover;border-radius:8px}
+.pick label{margin:0!important;color:var(--tx)!important;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer}
+.eps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.eps small{color:var(--mut)}
+.stars button{background:none;border:0;font-size:30px;padding:0 6px;color:var(--ac)}
+.row{display:flex;gap:10px;margin-top:20px}.row button{flex:1}
+.del{color:#ff8a8a}
+</style>
+</head>
+<body>
+<header><h1>Watchlist</h1><span id="st"></span></header>
+<div id="tabs"></div>
+<div id="grid"></div>
+<p id="empty" hidden>Nothing here yet. Tap + to add something.</p>
+<button id="fab" aria-label="Add" onclick="openForm()">+</button>
+<div class="sheet" id="m" hidden><div id="box"></div></div>
+
+<script>
+const API = 'PASTE_WEB_APP_URL_HERE';
+const live = API.startsWith('https');
+
+const $ = s => document.querySelector(s);
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const total = i => i.seasons.reduce((a, b) => a + b, 0);
+const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+
+let items = JSON.parse(localStorage.wl || '[]'), tab = 'all', f = null, isNew = false, timers = {};
+const persist = () => localStorage.wl = JSON.stringify(items);
+
+function pos(i) {
+  let w = i.w, s = 0;
+  if (!w) return 'Not started';
+  while (s < i.seasons.length - 1 && w > i.seasons[s]) { w -= i.seasons[s]; s++; }
+  return 'S' + (s + 1) + ' · E' + w;
+}
+
+function render() {
+  const list = items.filter(i => tab == 'all' || (tab == 'movie' && i.kind == 'movie') || (tab == 'series' && i.kind == 'series') || (tab == 'anime' && i.anime)).sort((a, b) => b.t - a.t);
+  $('#tabs').innerHTML = [['all','All'],['movie','Movies'],['series','Series'],['anime','Anime']].map(([k, l]) => `<button class="${tab == k ? 'on' : ''}" onclick="tab='${k}';render()">${l}</button>`).join('');
+  $('#grid').innerHTML = list.map(card).join('');
+  $('#empty').hidden = list.length > 0;
+}
+
+function card(i) {
+  const s = i.kind == 'series', done = s && !i.ongoing && i.w >= total(i);
+  const rd = (i.rating ? stars(i.rating) + ' ' : '') + (i.date || '');
+  const body = s
+    ? `<div class="step"><button onclick="step('${i.id}',-1)">−</button><span>${done ? 'Finished' : pos(i)}</span><button onclick="step('${i.id}',1)">+</button></div>${done && rd ? `<div class="sub">${rd}</div>` : ''}`
+    : `<div class="sub">${rd}</div>`;
+  return `<div class="card"><div class="poster" onclick="openForm('${i.id}')">${i.img ? `<img src="${i.img}">` : esc(i.title[0] || '?')}${i.anime ? '<span class="tag">Anime</span>' : ''}${s ? `<div class="bar"><i style="width:${Math.min(100, i.w / total(i) * 100)}%"></i></div>` : ''}</div><div class="meta"><b>${esc(i.title)}</b>${body}</div></div>`;
+}
+
+function step(id, d) {
+  const i = items.find(x => x.id == id), t = total(i);
+  if (d > 0) {
+    if (i.w >= t) { if (!i.ongoing) return; i.seasons[i.seasons.length - 1]++; }
+    i.w++;
+  } else i.w = Math.max(0, i.w - 1);
+  if (!i.ongoing) i.date = i.w >= total(i) ? (i.date || today()) : '';
+  save(i);
+}
+
+function save(i) {
+  i.t = Date.now();
+  const k = items.findIndex(x => x.id == i.id);
+  k < 0 ? items.push(i) : items[k] = i;
+  persist(); render();
+  sync(i.id, { action: 'save', item: i });
+}
+
+function sync(id, body) {
+  if (!live) return;
+  clearTimeout(timers[id]);
+  $('#st').textContent = 'Saving…';
+  timers[id] = setTimeout(async () => {
+    try {
+      await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
+      $('#st').textContent = 'Synced';
+    } catch (e) { $('#st').textContent = 'Offline'; }
+  }, 700);
+}
+
+async function load() {
+  render();
+  if (!live) return;
+  try {
+    const d = await (await fetch(API)).json();
+    if (d.items) { items = d.items; persist(); render(); $('#st').textContent = 'Synced'; }
+  } catch (e) { $('#st').textContent = 'Offline'; }
+}
+
+function openForm(id) {
+  const it = items.find(x => x.id == id);
+  isNew = !it;
+  f = it ? JSON.parse(JSON.stringify(it)) : { id: Date.now().toString(36), kind: 'movie', anime: false, title: '', img: '', rating: 0, date: today(), seasons: [12], ongoing: false, w: 0 };
+  draw();
+  $('#m').hidden = false;
+}
+const closeM = () => $('#m').hidden = true;
+
+function setK(k) {
+  f.kind = k;
+  if (k == 'series' && !f.seasons.length) f.seasons = [12];
+  if (isNew) f.date = k == 'movie' ? today() : '';
+  draw();
+}
+function setN(n) {
+  n = Math.max(1, Math.min(40, n || 1));
+  while (f.seasons.length < n) f.seasons.push(f.seasons[f.seasons.length - 1] || 12);
+  f.seasons.length = n;
+  draw();
+}
+function pic(file) {
+  if (!file) return;
+  const im = new Image();
+  im.onload = () => {
+    const w = 240, h = Math.round(im.height * w / im.width), c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(im, 0, 0, w, h);
+    f.img = c.toDataURL('image/jpeg', .7);
+    draw();
+  };
+  im.src = URL.createObjectURL(file);
+}
+
+function draw() {
+  const s = f.kind == 'series';
+  $('#box').innerHTML = `
+  <div class="seg"><button class="${!s ? 'on' : ''}" onclick="setK('movie')">Movie</button><button class="${s ? 'on' : ''}" onclick="setK('series')">Series</button></div>
+  <label class="chk"><input type="checkbox" ${f.anime ? 'checked' : ''} onchange="f.anime=this.checked"> Anime</label>
+  <input type="text" placeholder="Title" value="${esc(f.title)}" oninput="f.title=this.value">
+  <div class="pick">${f.img ? `<img src="${f.img}">` : ''}<label>${f.img ? 'Change poster' : 'Add poster'}<input type="file" accept="image/*" hidden onchange="pic(this.files[0])"></label></div>
+  ${s ? `<label>How many seasons?</label><input type="number" min="1" max="40" value="${f.seasons.length}" onchange="setN(+this.value)">
+  <label>Episodes in each season</label><div class="eps">${f.seasons.map((n, k) => `<div><small>Season ${k + 1}</small><input type="number" min="1" value="${n}" oninput="f.seasons[${k}]=Math.max(1,+this.value||1)"></div>`).join('')}</div>
+  <label class="chk"><input type="checkbox" ${f.ongoing ? 'checked' : ''} onchange="f.ongoing=this.checked"> Still airing (enter the episodes out so far)</label>
+  <label>Date finished</label>` : '<label>Date watched</label>'}
+  <input type="date" value="${f.date}" onchange="f.date=this.value">
+  <label>Rating (optional)</label>
+  <div class="stars">${[1,2,3,4,5].map(n => `<button onclick="f.rating=f.rating==${n}?0:${n};draw()">${n <= f.rating ? '★' : '☆'}</button>`).join('')}</div>
+  <div class="row"><button class="pri" onclick="commit()">Save</button>${isNew ? '' : '<button class="del" onclick="del()">Delete</button>'}<button onclick="closeM()">Cancel</button></div>`;
+}
+
+function commit() {
+  f.title = f.title.trim();
+  if (!f.title) return alert('Add a title first');
+  if (f.kind == 'series') {
+    f.w = Math.min(f.w, total(f));
+    if (!f.ongoing && f.w >= total(f) && !f.date) f.date = today();
+  } else { f.seasons = []; f.w = 0; }
+  save(f); closeM();
+}
+function del() {
+  if (!confirm('Delete "' + f.title + '"?')) return;
+  items = items.filter(x => x.id != f.id);
+  persist(); render(); sync(f.id, { action: 'delete', id: f.id }); closeM();
+}
+
+load();
+</script>
+</body>
+</html>
