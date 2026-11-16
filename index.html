@@ -101,7 +101,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const total = i => i.seasons.reduce((a, b) => a + b, 0);
 
 let items = JSON.parse(localStorage.wl || '[]'), tab = 'all', f = null, isNew = false, timers = {};
-const persist = () => localStorage.wl = JSON.stringify(items);
+const persist = () => { try { localStorage.wl = JSON.stringify(items); } catch (e) {} };
 
 const TABS = { all: 'All', movie: 'Movies', series: 'Series', am: 'Anime Movies', as: 'Anime Shows' };
 const THEMES = {
@@ -146,6 +146,8 @@ function drawTheme() {
   <div class="chips">${ACCENTS.map(c => `<button class="sw ${prefs.ac == c ? 'on' : ''}" style="background:${c}" onclick="setAc('${c}')"></button>`).join('')}<input type="color" value="${prefs.ac}" oninput="prefs.ac=this.value;savePrefs();applyPrefs()"></div>
   <label>Poster size</label>
   <input type="range" min="80" max="180" value="${prefs.pw}" oninput="prefs.pw=+this.value;savePrefs();applyPrefs()">
+  <label>Posters</label>
+  <div class="chips"><button onclick="refetchPosters()">Download missing posters</button><button onclick="pushPosters()">Upload this device's posters</button></div>
   <label>Tab order: drag ☰ to reorder (the top one opens first)</label>
   <div id="ord">${ordered().map(k => `<div class="ordr" data-k="${k}"><span class="grip">☰</span>${TABS[k]}</div>`).join('')}</div>
   <div class="row"><button onclick="resetTheme()">Reset</button><button class="pri" onclick="closeM()">Done</button></div>`;
@@ -286,16 +288,36 @@ async function load() {
     const d = await (await fetch(API)).json();
     if (d.items) {
       const old = Object.fromEntries(items.map(x => [x.id, x]));
-      items = d.items.map(x => ({ ...x, img: old[x.id] ? old[x.id].img || '' : '', ic: old[x.id] ? old[x.id].ic : 0 }));
+      items = d.items.map(x => { const o = old[x.id] || {}; return { ...x, img: o.img || x.img || '', ic: o.ic || 0 }; });
       persist(); render(); $('#st').textContent = 'Synced';
-      const need = items.filter(x => !x.ic && !x.img).map(x => x.id);
-      if (need.length) {
-        const g = await (await fetch(API + '?imgs=' + need.join(','))).json();
-        items.forEach(x => { if (g.imgs && x.id in g.imgs) { x.img = g.imgs[x.id]; x.ic = 1; } });
+      const need = items.filter(x => !x.img && Date.now() - (x.ic || 0) > 864e5).map(x => x.id);
+      for (let k = 0; k < need.length; k += 8) {
+        $('#st').textContent = 'Loading posters ' + Math.min(k + 8, need.length) + '/' + need.length;
+        const g = await (await fetch(API + '?imgs=' + need.slice(k, k + 8).join(','))).json();
+        if (!g.imgs) break;
+        items.forEach(x => { if (x.id in g.imgs) { x.ic = Date.now(); if (g.imgs[x.id]) x.img = g.imgs[x.id]; } });
         persist(); render();
       }
+      $('#st').textContent = 'Synced';
     }
   } catch (e) { $('#st').textContent = 'Offline'; }
+}
+
+function refetchPosters() {
+  items.forEach(x => { if (!x.img) x.ic = 0; });
+  persist(); closeM(); load();
+}
+async function pushPosters() {
+  closeM();
+  if (!live) return;
+  const list = items.filter(x => x.img);
+  for (let k = 0; k < list.length; k++) {
+    $('#st').textContent = 'Uploading ' + (k + 1) + '/' + list.length;
+    try {
+      await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'save', item: list[k] }) });
+    } catch (e) { $('#st').textContent = 'Offline'; return; }
+  }
+  $('#st').textContent = 'Posters uploaded';
 }
 
 function openForm(id) {
