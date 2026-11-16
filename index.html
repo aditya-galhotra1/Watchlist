@@ -44,6 +44,9 @@ button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--
 .chips button.on{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
 .chips .sw{width:34px;height:34px;padding:0}
 .chips .sw.on{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--tx);border-color:transparent}
+.ordr{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:8px;background:var(--bg);border:1px solid var(--line);border-radius:10px}
+.ordr.drag{position:relative;z-index:2;opacity:.85;border-color:var(--ac)}
+.grip{font-size:22px;color:var(--mut);touch-action:none;cursor:grab;padding:4px 8px;user-select:none;-webkit-user-select:none}
 .dot{width:14px;height:14px;border-radius:50%;border:1px solid #8886;display:inline-block}
 input[type=range]{width:100%;accent-color:var(--ac)}
 input[type=color]{width:46px;height:34px;border:0;background:none;padding:0}
@@ -100,6 +103,7 @@ const total = i => i.seasons.reduce((a, b) => a + b, 0);
 let items = JSON.parse(localStorage.wl || '[]'), tab = 'all', f = null, isNew = false, timers = {};
 const persist = () => localStorage.wl = JSON.stringify(items);
 
+const TABS = { all: 'All', movie: 'Movies', series: 'Series', am: 'Anime Movies', as: 'Anime Shows' };
 const THEMES = {
   midnight: ['Midnight', '#11131c', '#1a1d2a', '#2b3042', '#eceef5', '#8f95aa'],
   black:    ['Black',    '#000000', '#141414', '#2a2a2a', '#f5f5f5', '#8a8a8a'],
@@ -109,8 +113,14 @@ const THEMES = {
   plum:     ['Plum',     '#1a1020', '#261830', '#3d2850', '#f3e9f8', '#a58cb5']
 };
 const ACCENTS = ['#8be0c6', '#ff7a6b', '#6cb8ff', '#ffc94d', '#b69cff', '#ff7eb6'];
-let prefs = Object.assign({ theme: 'midnight', ac: '#8be0c6', pw: 104, sort: 'upd', hide: false }, JSON.parse(localStorage.wlp || '{}'));
+let prefs = Object.assign({ theme: 'midnight', ac: '#8be0c6', pw: 104, sort: 'upd', hide: false, order: Object.keys(TABS) }, JSON.parse(localStorage.wlp || '{}'));
 const savePrefs = () => localStorage.wlp = JSON.stringify(prefs);
+function ordered() {
+  const o = (prefs.order || []).filter(k => TABS[k]);
+  Object.keys(TABS).forEach(k => { if (!o.includes(k)) o.push(k); });
+  return o;
+}
+tab = ordered()[0];
 
 function onColor(h) {
   const n = parseInt(h.slice(1), 16);
@@ -136,8 +146,40 @@ function drawTheme() {
   <div class="chips">${ACCENTS.map(c => `<button class="sw ${prefs.ac == c ? 'on' : ''}" style="background:${c}" onclick="setAc('${c}')"></button>`).join('')}<input type="color" value="${prefs.ac}" oninput="prefs.ac=this.value;savePrefs();applyPrefs()"></div>
   <label>Poster size</label>
   <input type="range" min="80" max="180" value="${prefs.pw}" oninput="prefs.pw=+this.value;savePrefs();applyPrefs()">
+  <label>Tab order: drag ☰ to reorder (the top one opens first)</label>
+  <div id="ord">${ordered().map(k => `<div class="ordr" data-k="${k}"><span class="grip">☰</span>${TABS[k]}</div>`).join('')}</div>
   <div class="row"><button onclick="resetTheme()">Reset</button><button class="pri" onclick="closeM()">Done</button></div>`;
 }
+
+let dr = null, y0 = 0, tgt = null;
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest('.grip');
+  if (!g) return;
+  e.preventDefault();
+  dr = g.parentElement; y0 = e.clientY; tgt = null;
+  dr.classList.add('drag');
+  try { g.setPointerCapture(e.pointerId); } catch (x) {}
+});
+document.addEventListener('pointermove', e => {
+  if (!dr) return;
+  dr.style.transform = 'translateY(' + (e.clientY - y0) + 'px)';
+  const rows = [...dr.parentElement.children].filter(x => x !== dr);
+  rows.forEach(x => x.style.boxShadow = '');
+  tgt = rows.find(x => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; }) || null;
+  if (tgt) tgt.style.boxShadow = '0 -3px 0 var(--ac)';
+  else if (rows.length) rows[rows.length - 1].style.boxShadow = '0 3px 0 var(--ac)';
+});
+function endDrag() {
+  if (!dr) return;
+  const box = dr.parentElement;
+  dr.style.transform = ''; dr.classList.remove('drag');
+  [...box.children].forEach(x => x.style.boxShadow = '');
+  box.insertBefore(dr, tgt);
+  prefs.order = [...box.children].map(x => x.dataset.k);
+  dr = null; savePrefs(); render();
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
 
 const fin = i => i.kind == 'series' && !i.ongoing && i.w >= total(i);
 function dateNewest(a, b) {
@@ -184,7 +226,7 @@ function pos(i) {
 
 function render() {
   const list = items.filter(i => tab == 'all' || (tab == 'movie' && i.kind == 'movie' && !i.anime) || (tab == 'series' && i.kind == 'series' && !i.anime) || (tab == 'am' && i.kind == 'movie' && i.anime) || (tab == 'as' && i.kind == 'series' && i.anime)).filter(i => !(prefs.hide && fin(i))).sort(cmp);
-  $('#tabs').innerHTML = [['all','All'],['movie','Movies'],['series','Series'],['am','Anime Movies'],['as','Anime Shows']].map(([k, l]) => `<button class="${tab == k ? 'on' : ''}" onclick="tab='${k}';render()">${l}</button>`).join('');
+  $('#tabs').innerHTML = ordered().map(k => `<button class="${tab == k ? 'on' : ''}" onclick="tab='${k}';render()">${TABS[k]}</button>`).join('');
   $('#grid').innerHTML = list.map(card).join('');
   $('#empty').hidden = list.length > 0;
   $('#sort').value = prefs.sort;
