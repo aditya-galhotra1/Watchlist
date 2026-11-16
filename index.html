@@ -252,24 +252,31 @@ function step(id, d) {
   save(i);
 }
 
-function save(i) {
+function save(i, withImg) {
   i.t = Date.now();
   const k = items.findIndex(x => x.id == i.id);
   k < 0 ? items.push(i) : items[k] = i;
   persist(); render();
-  sync(i.id, { action: 'save', item: i });
+  const item = { ...i };
+  if (!withImg) delete item.img;
+  sync(i.id, { action: 'save', item });
 }
 
+const pend = {};
 function sync(id, body) {
   if (!live) return;
   clearTimeout(timers[id]);
+  const p = pend[id];
+  if (body.item && p && p.item && 'img' in p.item && !('img' in body.item)) body.item.img = p.item.img;
+  pend[id] = body;
   $('#st').textContent = 'Saving…';
   timers[id] = setTimeout(async () => {
+    const b = pend[id]; delete pend[id];
     try {
-      await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
+      await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(b) });
       $('#st').textContent = 'Synced';
     } catch (e) { $('#st').textContent = 'Offline'; }
-  }, 700);
+  }, 300);
 }
 
 async function load() {
@@ -277,7 +284,17 @@ async function load() {
   if (!live) return;
   try {
     const d = await (await fetch(API)).json();
-    if (d.items) { items = d.items; persist(); render(); $('#st').textContent = 'Synced'; }
+    if (d.items) {
+      const old = Object.fromEntries(items.map(x => [x.id, x]));
+      items = d.items.map(x => ({ ...x, img: old[x.id] ? old[x.id].img || '' : '', ic: old[x.id] ? old[x.id].ic : 0 }));
+      persist(); render(); $('#st').textContent = 'Synced';
+      const need = items.filter(x => !x.ic && !x.img).map(x => x.id);
+      if (need.length) {
+        const g = await (await fetch(API + '?imgs=' + need.join(','))).json();
+        items.forEach(x => { if (g.imgs && x.id in g.imgs) { x.img = g.imgs[x.id]; x.ic = 1; } });
+        persist(); render();
+      }
+    }
   } catch (e) { $('#st').textContent = 'Offline'; }
 }
 
@@ -314,7 +331,7 @@ function pic(file) {
       d = c.toDataURL('image/jpeg', q);
       if (q > .5) q -= .1; else w -= 40;
     } while (d.length > 45000 && w > 120);
-    f.img = d; draw();
+    f.img = d; f.imgNew = true; draw();
   };
   im.src = URL.createObjectURL(file);
 }
@@ -345,7 +362,9 @@ function commit() {
     if (!f.ongoing && f.w >= total(f) && !f.date) f.date = today();
   } else { f.seasons = []; f.w = 0; }
   delete f.all;
-  save(f); closeM();
+  const withImg = isNew || f.imgNew;
+  delete f.imgNew; f.ic = 1;
+  save(f, withImg); closeM();
 }
 function del() {
   if (!confirm('Delete "' + f.title + '"?')) return;
